@@ -8,6 +8,10 @@ version = pluginVersion
 repositories {
     mavenCentral()
     maven {
+        name = 'sponge'
+        url = 'http://repo.spongepowered.org/maven'
+    }
+    maven {
         name = 'inventivetalent'
         url = 'https://repo.inventivetalent.org/content/groups/public/'
     }
@@ -16,6 +20,7 @@ repositories {
 dependencies {
     compile 'org.spongepowered:spongeapi:5.0.0-SNAPSHOT'
     compile 'org.mineskin:java-client:1.0.0-SNAPSHOT'
+    compileOnly "org.projectlombok:lombok:1.16.10"
 }
 
 sponge.plugin.id = pluginId
