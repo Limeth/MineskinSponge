@@ -33,6 +33,9 @@ sponge.plugin.id = pluginId
 build.dependsOn(shadowJar)
 jar.enabled = false
 
+// Remove the `-all` suffix from the artifact name
+shadowJar.classifier = null
+
 publishing {
     publications {
         shadow(MavenPublication) {
