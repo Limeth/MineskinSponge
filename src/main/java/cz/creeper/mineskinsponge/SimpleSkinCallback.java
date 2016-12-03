@@ -3,15 +3,15 @@ package cz.creeper.mineskinsponge;
 import lombok.Getter;
 import org.mineskin.data.Skin;
 import org.mineskin.data.SkinCallback;
-import org.spongepowered.api.Sponge;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 public class SimpleSkinCallback implements SkinCallback {
     private final Futurify<Skin> futurify;
 
-    public SimpleSkinCallback(Object plugin) {
-        futurify = new Futurify<>(Sponge.getScheduler().createAsyncExecutor(plugin));
+    public SimpleSkinCallback(Executor executor) {
+        futurify = new Futurify<>(executor);
     }
 
     public CompletableFuture<Skin> getFuture() {

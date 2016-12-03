@@ -1,4 +1,5 @@
 plugins {
+    id 'com.github.johnrengelman.shadow' version '1.2.4'
     id 'org.spongepowered.plugin' version '0.7'
 }
 
@@ -18,9 +19,13 @@ repositories {
 }
 
 dependencies {
-    compile 'org.spongepowered:spongeapi:5.0.0-SNAPSHOT'
+    compile 'org.spongepowered:spongeapi:5.1.0-20161126.155936-7'
     compile 'org.mineskin:java-client:1.0.0-SNAPSHOT'
-    compileOnly "org.projectlombok:lombok:1.16.10"
+    compileOnly 'org.projectlombok:lombok:1.16.10'
 }
 
 sponge.plugin.id = pluginId
+
+// Build a jar with dependencies when executing `gradle build`
+build.dependsOn(shadowJar)
+jar.enabled = false
