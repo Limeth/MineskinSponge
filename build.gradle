@@ -3,6 +3,9 @@ plugins {
     id 'org.spongepowered.plugin' version '0.7'
 }
 
+apply plugin: 'java'
+apply plugin: 'maven-publish'
+
 group = pluginGroup
 version = pluginVersion
 
@@ -29,3 +32,11 @@ sponge.plugin.id = pluginId
 // Build a jar with dependencies when executing `gradle build`
 build.dependsOn(shadowJar)
 jar.enabled = false
+
+publishing {
+    publications {
+        shadow(MavenPublication) {
+            from components.shadow
+        }
+    }
+}
