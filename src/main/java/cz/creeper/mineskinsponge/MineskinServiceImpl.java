@@ -20,11 +20,9 @@ import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -32,7 +30,7 @@ public class MineskinServiceImpl implements MineskinService {
     public static final String CONFIG_FILE_NAME = "permanent_cache.conf";
     public static final String CONFIG_NODE_MD5TOSKIN = "md5_to_skin";
     private final MineskinClient client = new MineskinClient();
-    private final Map<Path, String> pathToMd5 = Maps.newHashMap();
+    private final Map<Path, CompletableFuture<String>> pathToMd5 = Maps.newHashMap();
     /** Do not access directly, use the corresponding methods instead. */
     @Deprecated
     private final BiMap<String, SkinRecord> md5ToSkin = HashBiMap.create();
@@ -130,25 +128,27 @@ public class MineskinServiceImpl implements MineskinService {
 
     @Override
     public CompletableFuture<SkinRecord> getSkin(Path texturePath) {
-        String md5 = getMd5(texturePath);
-        Optional<SkinRecord> skinRecord = getSkinRecord(md5);
+        MineskinSponge plugin = MineskinSponge.getInstance();
 
-        if(skinRecord.isPresent()) {
-            return CompletableFuture.completedFuture(skinRecord.get());
-        } else {
-            MineskinSponge plugin = MineskinSponge.getInstance();
-            SimpleSkinCallback callback = new SimpleSkinCallback(plugin.getAsyncExecutor());
+        return getMd5(texturePath).thenCompose(md5 -> {
+            Optional<SkinRecord> skinRecord = getSkinRecord(md5);
 
-            client.generateUpload(texturePath.toFile(), callback);
+            if (skinRecord.isPresent()) {
+                return CompletableFuture.completedFuture(skinRecord.get());
+            } else {
+                SimpleSkinCallback callback = new SimpleSkinCallback(plugin.getAsyncExecutor());
 
-            return callback.getFuture()
-                    .thenApply(SkinRecord::new)
-                    .thenApply(newRecord -> {
-                        registerSkinRecord(md5, newRecord);
-                        return newRecord;
-                    })
-                    .thenApplyAsync(Function.identity(), plugin.getSyncExecutor());
-        }
+                client.generateUpload(texturePath.toFile(), callback);
+
+                return callback.getFuture()
+                        .thenApply(SkinRecord::new)
+                        .thenApply(newRecord -> {
+                            registerSkinRecord(md5, newRecord);
+                            return newRecord;
+                        });
+            }
+        })
+        .thenApplyAsync(Function.identity(), plugin.getSyncExecutor());
     }
 
     @Override
@@ -164,15 +164,29 @@ public class MineskinServiceImpl implements MineskinService {
     public Map<Path, SkinRecord> getCachedSkinMap() {
         //noinspection deprecation
         synchronized (md5ToSkin) {
-            //noinspection deprecation
             return pathToMd5.entrySet().stream()
-                    .map(entry -> Pair.of(entry.getKey(), md5ToSkin.get(entry.getValue())))
+                    .filter(entry -> {
+                        CompletableFuture<String> md5 = entry.getValue();
+
+                        return md5.isDone() && !md5.isCancelled() && !md5.isCompletedExceptionally();
+                    })
+                    .map(entry -> {
+                        try {
+                            //noinspection deprecation
+                            return Pair.of(entry.getKey(), md5ToSkin.get(entry.getValue().get()));
+                        } catch (InterruptedException | ExecutionException e) {
+                            throw new RuntimeException(e);
+                        }
+                    })
                     .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
         }
     }
 
     @Override
     public void clearCache(boolean clearPermanentCache) {
+        pathToMd5.entrySet().stream()
+                .filter(entry -> !entry.getValue().isDone())
+                .forEach(entry -> entry.getValue().cancel(true));
         pathToMd5.clear();
 
         //noinspection deprecation
@@ -214,36 +228,30 @@ public class MineskinServiceImpl implements MineskinService {
         }
     }
 
-    private String getMd5(Path path) {
-        String md5 = pathToMd5.get(path);
-
-        if(md5 == null) {
-            md5 = generateMd5(path);
-
-            pathToMd5.put(path, md5);
-        }
-
-        return md5;
+    private CompletableFuture<String> getMd5(Path path) {
+        return pathToMd5.computeIfAbsent(path, k -> generateMd5(path));
     }
 
-    private String generateMd5(Path path) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
+    private CompletableFuture<String> generateMd5(Path path) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                MessageDigest md = MessageDigest.getInstance("MD5");
 
-            try (InputStream is = Files.newInputStream(path);
-                 DigestInputStream dis = new DigestInputStream(is, md)) {
-                int readByte;
+                try (InputStream is = Files.newInputStream(path);
+                     DigestInputStream dis = new DigestInputStream(is, md)) {
+                    int readByte;
 
-                do {
-                    readByte = dis.read();
-                } while(readByte != -1);
+                    do {
+                        readByte = dis.read();
+                    } while(readByte != -1);
+                }
+
+                byte[] bytes = md.digest();
+
+                return HexBin.encode(bytes);
+            } catch (IOException | NoSuchAlgorithmException e) {
+                throw new RuntimeException(e);
             }
-
-            byte[] bytes = md.digest();
-
-            return HexBin.encode(bytes);
-        } catch (IOException | NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
+        }, MineskinSponge.getInstance().getAsyncExecutor());
     }
 }
