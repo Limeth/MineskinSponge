@@ -15,6 +15,7 @@ import org.spongepowered.api.event.game.state.GameConstructionEvent;
 import org.spongepowered.api.event.game.state.GamePreInitializationEvent;
 import org.spongepowered.api.event.game.state.GameStoppedEvent;
 import org.spongepowered.api.plugin.Plugin;
+import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.scheduler.Scheduler;
 
 import java.nio.file.Path;
@@ -57,11 +58,17 @@ public class MineskinSponge {
         syncExecutor = scheduler.createSyncExecutor(this);
         service = new MineskinServiceImpl().load();
         Sponge.getServiceManager().setProvider(this, MineskinService.class, service);
+        MineskinCommands.register();
     }
 
     @Listener(order = Order.LATE)
     public void onGameStopped(GameStoppedEvent event) {
         service.save();
+    }
+
+    public PluginContainer getPluginContainer() {
+        return Sponge.getPluginManager().fromInstance(this)
+                .orElseThrow(() -> new IllegalStateException("Could not access the PluginContainer."));
     }
 
     private ConfigurationOptions initConfigurationOptions() {
