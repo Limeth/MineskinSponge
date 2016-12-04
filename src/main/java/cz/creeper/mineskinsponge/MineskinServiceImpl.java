@@ -28,6 +28,9 @@ public class MineskinServiceImpl implements MineskinService {
     public static final String CONFIG_FILE_NAME = "permanent_cache.conf";
     public static final String CONFIG_NODE_MD5TOSKIN = "md5_to_skin";
     private final MineskinClient client = new MineskinClient();
+    /** Accessed from multiple threads. For safety, do not access directly, unless you know what you're doing. */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated
     private final Map<Path, CompletableFuture<String>> pathToMd5 = Maps.newHashMap();
     /** Accessed from multiple threads. For safety, do not access directly, unless you know what you're doing. */
     @SuppressWarnings("DeprecatedIsStillUsed")
@@ -159,20 +162,29 @@ public class MineskinServiceImpl implements MineskinService {
 
     @Override
     public Map<Path, CompletableFuture<SkinRecord>> getSkinMapAsync() {
-        return pathToMd5.keySet().stream()
-                .map(path -> Pair.of(path, getSkinAsync(path)))
-                .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+        //noinspection deprecation
+        synchronized (pathToMd5) {
+            //noinspection deprecation
+            return pathToMd5.keySet().stream()
+                    .map(path -> Pair.of(path, getSkinAsync(path)))
+                    .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+        }
     }
 
     @Override
     public void clearCache(boolean clearPermanentCache, boolean interrupt) {
-        if(interrupt) {
-            pathToMd5.entrySet().stream()
-                    .filter(entry -> !entry.getValue().isDone())
-                    .forEach(entry -> entry.getValue().cancel(true));
-        }
+        //noinspection deprecation
+        synchronized (pathToMd5) {
+            if (interrupt) {
+                //noinspection deprecation
+                pathToMd5.entrySet().stream()
+                        .filter(entry -> !entry.getValue().isDone())
+                        .forEach(entry -> entry.getValue().cancel(true));
+            }
 
-        pathToMd5.clear();
+            //noinspection deprecation
+            pathToMd5.clear();
+        }
 
         //noinspection deprecation
         synchronized (md5ToSkin) {
@@ -197,7 +209,11 @@ public class MineskinServiceImpl implements MineskinService {
     }
 
     private CompletableFuture<String> getMd5(Path path) {
-        return pathToMd5.computeIfAbsent(path, k -> computeMd5(path));
+        //noinspection deprecation
+        synchronized (pathToMd5) {
+            //noinspection deprecation
+            return pathToMd5.computeIfAbsent(path, k -> computeMd5(path));
+        }
     }
 
     private CompletableFuture<String> computeMd5(Path path) {
