@@ -1,7 +1,5 @@
 package cz.creeper.mineskinsponge;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.reflect.TypeToken;
@@ -20,10 +18,10 @@ import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class MineskinServiceImpl implements MineskinService {
@@ -31,9 +29,10 @@ public class MineskinServiceImpl implements MineskinService {
     public static final String CONFIG_NODE_MD5TOSKIN = "md5_to_skin";
     private final MineskinClient client = new MineskinClient();
     private final Map<Path, CompletableFuture<String>> pathToMd5 = Maps.newHashMap();
-    /** Do not access directly, use the corresponding methods instead. */
+    /** Accessed from multiple threads. For safety, do not access directly, unless you know what you're doing. */
+    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
-    private final BiMap<String, SkinRecord> md5ToSkin = HashBiMap.create();
+    private final Map<String, CompletableFuture<SkinRecord>> md5ToSkin = Maps.newHashMap();
 
     public MineskinServiceImpl load() {
         MineskinSponge plugin = MineskinSponge.getInstance();
@@ -59,7 +58,7 @@ public class MineskinServiceImpl implements MineskinService {
 
                 try {
                     //noinspection deprecation
-                    md5ToSkin.put((String) key, value.getValue(TypeToken.of(SkinRecord.class)));
+                    md5ToSkin.put((String) key, CompletableFuture.completedFuture(value.getValue(TypeToken.of(SkinRecord.class))));
                 } catch (ObjectMappingException | ClassCastException e) {
                     plugin.getLogger().warn("Could not parse a SkinRecord: " + Objects.toString(key) + " -> " +
                                             Objects.toString(value) + "; skipping.");
@@ -80,9 +79,12 @@ public class MineskinServiceImpl implements MineskinService {
         //noinspection deprecation
         synchronized (md5ToSkin) {
             //noinspection deprecation
-            for(Map.Entry<String, SkinRecord> entry : md5ToSkin.entrySet()) {
+            for(Map.Entry<String, CompletableFuture<SkinRecord>> entry : md5ToSkin.entrySet()) {
+                if(!MineskinService.isSuccessfulEntry(entry))
+                    continue;
+
                 String key = entry.getKey();
-                SkinRecord value = entry.getValue();
+                SkinRecord value = MineskinService.unwrap(entry.getValue());
 
                 try {
                     md5ToSkinNode.getNode(key).setValue(TypeToken.of(SkinRecord.class), value);
@@ -127,32 +129,27 @@ public class MineskinServiceImpl implements MineskinService {
     }
 
     @Override
-    public CompletableFuture<SkinRecord> getSkin(Path texturePath) {
-        MineskinSponge plugin = MineskinSponge.getInstance();
-
+    public CompletableFuture<SkinRecord> getSkinAsync(Path texturePath) {
         return getMd5(texturePath).thenCompose(md5 -> {
-            Optional<SkinRecord> skinRecord = getSkinRecord(md5);
-
-            if (skinRecord.isPresent()) {
-                return CompletableFuture.completedFuture(skinRecord.get());
-            } else {
-                SimpleSkinCallback callback = new SimpleSkinCallback(plugin.getAsyncExecutor());
-
-                client.generateUpload(texturePath.toFile(), callback);
-
-                return callback.getFuture()
-                        .thenApply(SkinRecord::new)
-                        .thenApply(newRecord -> {
-                            registerSkinRecord(md5, newRecord);
-                            return newRecord;
-                        });
+            //noinspection deprecation
+            synchronized (md5ToSkin) {
+                //noinspection deprecation
+                return md5ToSkin.computeIfAbsent(md5, k -> computeSkin(texturePath));
             }
-        })
-        .thenApplyAsync(Function.identity(), plugin.getSyncExecutor());
+        });
+    }
+
+    private CompletableFuture<SkinRecord> computeSkin(Path texturePath) {
+        MineskinSponge plugin = MineskinSponge.getInstance();
+        SimpleSkinCallback callback = new SimpleSkinCallback(plugin.getAsyncExecutor());
+
+        client.generateUpload(texturePath.toFile(), callback);
+
+        return callback.getFuture().thenApply(SkinRecord::new);
     }
 
     @Override
-    public Collection<SkinRecord> getCachedSkins() {
+    public Collection<CompletableFuture<SkinRecord>> getSkinsAsync() {
         //noinspection deprecation
         synchronized (md5ToSkin) {
             //noinspection deprecation
@@ -161,36 +158,31 @@ public class MineskinServiceImpl implements MineskinService {
     }
 
     @Override
-    public Map<Path, SkinRecord> getCachedSkinMap() {
-        //noinspection deprecation
-        synchronized (md5ToSkin) {
-            return pathToMd5.entrySet().stream()
-                    .filter(entry -> {
-                        CompletableFuture<String> md5 = entry.getValue();
-
-                        return md5.isDone() && !md5.isCancelled() && !md5.isCompletedExceptionally();
-                    })
-                    .map(entry -> {
-                        try {
-                            //noinspection deprecation
-                            return Pair.of(entry.getKey(), md5ToSkin.get(entry.getValue().get()));
-                        } catch (InterruptedException | ExecutionException e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
-                    .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
-        }
+    public Map<Path, CompletableFuture<SkinRecord>> getSkinMapAsync() {
+        return pathToMd5.keySet().stream()
+                .map(path -> Pair.of(path, getSkinAsync(path)))
+                .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     }
 
     @Override
-    public void clearCache(boolean clearPermanentCache) {
-        pathToMd5.entrySet().stream()
-                .filter(entry -> !entry.getValue().isDone())
-                .forEach(entry -> entry.getValue().cancel(true));
+    public void clearCache(boolean clearPermanentCache, boolean interrupt) {
+        if(interrupt) {
+            pathToMd5.entrySet().stream()
+                    .filter(entry -> !entry.getValue().isDone())
+                    .forEach(entry -> entry.getValue().cancel(true));
+        }
+
         pathToMd5.clear();
 
         //noinspection deprecation
         synchronized (md5ToSkin) {
+            if(interrupt) {
+                //noinspection deprecation
+                md5ToSkin.entrySet().stream()
+                        .filter(entry -> !entry.getValue().isDone())
+                        .forEach(entry -> entry.getValue().cancel(true));
+            }
+
             //noinspection deprecation
             md5ToSkin.clear();
         }
@@ -204,35 +196,11 @@ public class MineskinServiceImpl implements MineskinService {
         }
     }
 
-    public void registerSkinRecord(String md5, SkinRecord skinRecord) {
-        //noinspection deprecation
-        synchronized (md5ToSkin) {
-            //noinspection deprecation
-            md5ToSkin.put(md5, skinRecord);
-        }
-    }
-
-    public Optional<SkinRecord> getSkinRecord(String md5) {
-        //noinspection deprecation
-        synchronized (md5ToSkin) {
-            //noinspection deprecation
-            return Optional.ofNullable(md5ToSkin.get(md5));
-        }
-    }
-
-    public Optional<String> getMd5(SkinRecord skinRecord) {
-        //noinspection deprecation
-        synchronized (md5ToSkin) {
-            //noinspection deprecation
-            return Optional.ofNullable(md5ToSkin.inverse().get(skinRecord));
-        }
-    }
-
     private CompletableFuture<String> getMd5(Path path) {
-        return pathToMd5.computeIfAbsent(path, k -> generateMd5(path));
+        return pathToMd5.computeIfAbsent(path, k -> computeMd5(path));
     }
 
-    private CompletableFuture<String> generateMd5(Path path) {
+    private CompletableFuture<String> computeMd5(Path path) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 MessageDigest md = MessageDigest.getInstance("MD5");
