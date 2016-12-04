@@ -42,6 +42,7 @@ public class MineskinSponge {
     @Getter(lazy = true)
     private final ConfigurationOptions configurationOptions = initConfigurationOptions();
     private Executor asyncExecutor;
+    private Executor syncExecutor;
     private MineskinServiceImpl service;
 
     @Listener(order = Order.EARLY)
@@ -53,6 +54,7 @@ public class MineskinSponge {
     public void onGamePreInitialization(GamePreInitializationEvent event) {
         Scheduler scheduler = Sponge.getScheduler();
         asyncExecutor = scheduler.createAsyncExecutor(this);
+        syncExecutor = scheduler.createSyncExecutor(this);
         service = new MineskinServiceImpl().load();
         Sponge.getServiceManager().setProvider(this, MineskinService.class, service);
     }

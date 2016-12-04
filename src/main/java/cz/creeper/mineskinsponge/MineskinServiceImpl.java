@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class MineskinServiceImpl implements MineskinService {
@@ -145,7 +146,8 @@ public class MineskinServiceImpl implements MineskinService {
                     .thenApply(newRecord -> {
                         registerSkinRecord(md5, newRecord);
                         return newRecord;
-                    });
+                    })
+                    .thenApplyAsync(Function.identity(), plugin.getSyncExecutor());
         }
     }
 
@@ -229,7 +231,13 @@ public class MineskinServiceImpl implements MineskinService {
             MessageDigest md = MessageDigest.getInstance("MD5");
 
             try (InputStream is = Files.newInputStream(path);
-                 DigestInputStream ignored = new DigestInputStream(is, md)) {}
+                 DigestInputStream dis = new DigestInputStream(is, md)) {
+                int readByte;
+
+                do {
+                    readByte = dis.read();
+                } while(readByte != -1);
+            }
 
             byte[] bytes = md.digest();
 
