@@ -95,6 +95,13 @@ public interface MineskinService {
      */
     Map<Path, CompletableFuture<SkinRecord>> getSkinMapAsync();
 
+
+    /**
+     * The skin retrieval is done asynchronously, but any {@link CompletableFuture#thenApply(Function)}
+     * method call on the returned {@link CompletableFuture} is run synchronously on the main thread.
+     *
+     * @return A map of all skins that are being fetched or have been cached
+     */
     default Map<Path, CompletableFuture<SkinRecord>> getSkinMap() {
         return getSkinMapAsync().entrySet().stream()
                 .map(entry -> Pair.of(entry.getKey(), synchronize(entry.getValue())))

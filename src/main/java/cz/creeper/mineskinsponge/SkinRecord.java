@@ -11,6 +11,8 @@ import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.profile.GameProfile;
 import org.spongepowered.api.profile.property.ProfileProperty;
 
+import java.util.Collection;
+import java.util.Optional;
 import java.util.UUID;
 
 @AllArgsConstructor(access = AccessLevel.PACKAGE)
@@ -31,10 +33,43 @@ public final class SkinRecord {
         this(skin.data.uuid, skin.data.texture.value, skin.data.texture.signature);
     }
 
+    /**
+     * Gets a SkinRecord that has been assigned to this {@link ItemStack}.
+     *
+     * @param itemStack The {@link ItemStack} to get the {@link SkinRecord} of
+     * @return The {@link SkinRecord}, if found, or {@link Optional#empty()} instead.
+     */
+    public static Optional<SkinRecord> of(ItemStack itemStack) {
+        if(itemStack.getItem() != ItemTypes.SKULL
+                || itemStack.get(Keys.SKULL_TYPE).orElse(SkullTypes.SKELETON) != SkullTypes.PLAYER)
+            return Optional.empty();
+
+        return itemStack.get(Keys.REPRESENTED_PLAYER).flatMap(profile -> {
+            Collection<ProfileProperty> properties = profile.getPropertyMap().get(PROPERTY_TEXTURES);
+
+            if(properties.size() != 1)
+                return Optional.empty();
+
+            ProfileProperty property = properties.iterator().next();
+            Optional<String> signature = property.getSignature();
+
+            if(!signature.isPresent())
+                return Optional.empty();
+
+            return Optional.of(new SkinRecord(profile.getUniqueId(), property.getValue(), signature.get()));
+        });
+    }
+
+    /**
+     * @return A player head with this skin
+     */
     public ItemStack create() {
         return create(1);
     }
 
+    /**
+     * @return A player head with this skin
+     */
     public ItemStack create(int quantity) {
         ItemStack result = ItemStack.of(ItemTypes.SKULL, quantity);
 
@@ -43,6 +78,11 @@ public final class SkinRecord {
         return result;
     }
 
+    /**
+     * Applies this skin to the specified {@link ItemStack}.
+     *
+     * @param itemStack The {@link ItemStack} to apply the skin to
+     */
     public void apply(ItemStack itemStack) {
         itemStack.offer(Keys.SKULL_TYPE, SkullTypes.PLAYER);
         itemStack.offer(Keys.REPRESENTED_PLAYER, getProfile());
