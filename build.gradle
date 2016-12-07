@@ -27,6 +27,13 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.16.10'
 }
 
+shadowJar {
+    dependencies {
+        exclude(dependency('org.spongepowered:spongeapi:.*'))
+        exclude(dependency('org.projectlombok:lombok:.*'))
+    }
+}
+
 sponge.plugin.id = pluginId
 
 // Build a jar with dependencies when executing `gradle build`
