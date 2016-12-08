@@ -1,6 +1,6 @@
 plugins {
     id 'com.github.johnrengelman.shadow' version '1.2.4'
-    id 'org.spongepowered.plugin' version '0.7'
+    id 'org.spongepowered.plugin' version '0.8'
 }
 
 apply plugin: 'java'
@@ -29,8 +29,7 @@ dependencies {
 
 shadowJar {
     dependencies {
-        exclude(dependency('org.spongepowered:spongeapi:.*'))
-        exclude(dependency('org.projectlombok:lombok:.*'))
+        include(dependency('org.mineskin:java-client:.*'))
     }
 }
 
