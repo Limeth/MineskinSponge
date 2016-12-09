@@ -1,13 +1,10 @@
 package cz.creeper.mineskinsponge;
 
-import com.sun.istack.internal.NotNull;
-import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
 
 import java.net.URI;
-import java.util.Comparator;
 
 @Getter
 @EqualsAndHashCode
