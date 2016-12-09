@@ -2,8 +2,14 @@ package cz.creeper.mineskinsponge;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.mineskin.MineskinClient;
+import org.spongepowered.api.asset.Asset;
 import org.spongepowered.api.scheduler.Scheduler;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Map;
@@ -53,6 +59,128 @@ public interface MineskinService {
      */
     default CompletableFuture<SkinRecord> getSkin(Path texturePath) {
         return synchronize(getSkinAsync(texturePath));
+    }
+
+    /**
+     * Sends the specified texture to the Mineskin service,
+     * the received data is then registered and cached to be re-used the next
+     * time this method is called.
+     *
+     * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
+     * will be executed asynchronously in order to access the Sponge instance,
+     * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
+     * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
+     *
+     * @param asset The texture asset
+     * @return A {@link CompletableFuture} containing the resulting {@link SkinRecord}
+     *
+     * @see #getSkin(Path)
+     */
+    default CompletableFuture<SkinRecord> getSkinAsync(Asset asset) {
+        return getSkinAsync(asset.getUrl(), asset.getOwner().getVersion().orElse("unknown"));
+    }
+
+    /**
+     * Sends the specified texture to the Mineskin service,
+     * the received data is then registered and cached to be re-used the next
+     * time this method is called.
+     *
+     * The skin retrieval is done asynchronously, but any {@link CompletableFuture#thenApply(Function)}
+     * method call on the returned {@link CompletableFuture} is run synchronously on the main thread.
+     *
+     * @param asset The texture asset
+     * @return A {@link CompletableFuture} containing the resulting {@link SkinRecord}
+     *
+     * @see #getSkinAsync(Path)
+     */
+    default CompletableFuture<SkinRecord> getSkin(Asset asset) {
+        return synchronize(getSkinAsync(asset));
+    }
+
+    /**
+     * Sends the specified texture to the Mineskin service,
+     * the received data is then registered and cached to be re-used the next
+     * time this method is called.
+     *
+     * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
+     * will be executed asynchronously in order to access the Sponge instance,
+     * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
+     * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
+     *
+     * @param url The path to the resource
+     * @param version The version of this resource
+     * @return A {@link CompletableFuture} containing the resulting {@link SkinRecord}
+     *
+     * @see #getSkin(Path)
+     */
+    default CompletableFuture<SkinRecord> getSkinAsync(URL url, String version) {
+        try {
+            return getSkinAsync(new Resource(url.toURI(), version, () -> {
+                try {
+                    return url.openStream();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }));
+        } catch (URISyntaxException e) {
+            CompletableFuture<SkinRecord> invalid = new CompletableFuture<>();
+
+            invalid.completeExceptionally(e);
+
+            return invalid;
+        }
+    }
+
+    /**
+     * Sends the specified texture to the Mineskin service,
+     * the received data is then registered and cached to be re-used the next
+     * time this method is called.
+     *
+     * The skin retrieval is done asynchronously, but any {@link CompletableFuture#thenApply(Function)}
+     * method call on the returned {@link CompletableFuture} is run synchronously on the main thread.
+     *
+     * @param url The path to the resource
+     * @param version The version of this resource
+     * @return A {@link CompletableFuture} containing the resulting {@link SkinRecord}
+     *
+     * @see #getSkinAsync(Path)
+     */
+    default CompletableFuture<SkinRecord> getSkin(URL url, String version) {
+        return synchronize(getSkinAsync(url, version));
+    }
+
+    /**
+     * Sends the specified texture to the Mineskin service,
+     * the received data is then registered and cached to be re-used the next
+     * time this method is called.
+     *
+     * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
+     * will be executed asynchronously in order to access the Sponge instance,
+     * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
+     * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
+     *
+     * @param resource An opened resource to read from.
+     * @return A {@link CompletableFuture} containing the resulting {@link SkinRecord}
+     *
+     * @see #getSkin(Path)
+     */
+    CompletableFuture<SkinRecord> getSkinAsync(Resource resource);
+
+    /**
+     * Sends the specified texture to the Mineskin service,
+     * the received data is then registered and cached to be re-used the next
+     * time this method is called.
+     *
+     * The skin retrieval is done asynchronously, but any {@link CompletableFuture#thenApply(Function)}
+     * method call on the returned {@link CompletableFuture} is run synchronously on the main thread.
+     *
+     * @param resource An opened resource to read from.
+     * @return A {@link CompletableFuture} containing the resulting {@link SkinRecord}
+     *
+     * @see #getSkinAsync(Path)
+     */
+    default CompletableFuture<SkinRecord> getSkin(Resource resource) {
+        return synchronize(getSkinAsync(resource));
     }
 
     /**
