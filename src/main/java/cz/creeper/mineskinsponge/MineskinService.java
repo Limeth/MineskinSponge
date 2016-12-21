@@ -33,7 +33,7 @@ public interface MineskinService {
      * time this method is called.
      *
      * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
-     * will be executed asynchronously in order to access the Sponge instance,
+     * will be executed asynchronously. In order to access the Sponge instance,
      * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
      * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
      *
@@ -67,7 +67,7 @@ public interface MineskinService {
      * time this method is called.
      *
      * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
-     * will be executed asynchronously in order to access the Sponge instance,
+     * will be executed asynchronously. In order to access the Sponge instance,
      * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
      * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
      *
@@ -103,7 +103,7 @@ public interface MineskinService {
      * time this method is called.
      *
      * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
-     * will be executed asynchronously in order to access the Sponge instance,
+     * will be executed asynchronously. In order to access the Sponge instance,
      * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
      * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
      *
@@ -155,11 +155,11 @@ public interface MineskinService {
      * time this method is called.
      *
      * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
-     * will be executed asynchronously in order to access the Sponge instance,
+     * will be executed asynchronously. In order to access the Sponge instance,
      * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
      * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
      *
-     * @param resource An opened resource to read from.
+     * @param resource The resouce to read the data from
      * @return A {@link CompletableFuture} containing the resulting {@link SkinRecord}
      *
      * @see #getSkin(Path)
@@ -174,7 +174,7 @@ public interface MineskinService {
      * The skin retrieval is done asynchronously, but any {@link CompletableFuture#thenApply(Function)}
      * method call on the returned {@link CompletableFuture} is run synchronously on the main thread.
      *
-     * @param resource An opened resource to read from.
+     * @param resource The resouce to read the data from
      * @return A {@link CompletableFuture} containing the resulting {@link SkinRecord}
      *
      * @see #getSkinAsync(Path)
@@ -185,7 +185,7 @@ public interface MineskinService {
 
     /**
      * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
-     * will be executed asynchronously in order to access the Sponge instance,
+     * will be executed asynchronously. In order to access the Sponge instance,
      * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
      * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
      *
@@ -215,7 +215,7 @@ public interface MineskinService {
 
     /**
      * Any {@link CompletableFuture#thenApply(Function)} method calls on these futures
-     * will be executed asynchronously in order to access the Sponge instance,
+     * will be executed asynchronously. In order to access the Sponge instance,
      * make sure to use the {@link CompletableFuture#thenApplyAsync(Function, Executor)} methods
      * where the {@link Executor} is the result of {@link Scheduler#createSyncExecutor(Object)}.
      *
@@ -259,10 +259,20 @@ public interface MineskinService {
     @SuppressWarnings("SameParameterValue")
     void clearCache(boolean clearPermanentCache, boolean interrupt);
 
+    /**
+     * Clears the data cache. This forces all skin data to be re-downloaded
+     * from the Mineskin service. Does not interrupt tasks.
+     *
+     * @param clearPermanentCache Delete the cache files too
+     */
     default void clearCache(boolean clearPermanentCache) {
         clearCache(clearPermanentCache, false);
     }
 
+    /**
+     * Clears the data cache, both temporary and permanent. This forces all skin data to be re-downloaded
+     * from the Mineskin service. Does not interrupt tasks.
+     */
     default void clearCache() {
         clearCache(true);
     }
@@ -276,14 +286,24 @@ public interface MineskinService {
         return future.thenApplyAsync(Function.identity(), plugin.getSyncExecutor());
     }
 
+    /**
+     * @return {@code true}, if the future finished successfully; {@code false} otherwise
+     */
     static <T> boolean isSuccessfulEntry(Map.Entry<?, CompletableFuture<T>> entry) {
         return isSuccessful(entry.getValue());
     }
 
+    /**
+     * @return {@code true}, if the future finished successfully; {@code false} otherwise
+     */
     static boolean isSuccessful(CompletableFuture<?> future) {
         return future.isDone() && !future.isCompletedExceptionally() && !future.isCancelled();
     }
 
+    /**
+     * @return The value of the future
+     * @throws IllegalStateException If the future did not finish successfully
+     */
     static <T> T unwrap(CompletableFuture<T> future) {
         try {
             return future.get();
